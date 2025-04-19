@@ -1,11 +1,14 @@
-import express from "express";
-import axios from "axios";
+const express = require("express");
+const axios = require("axios");
+const cors = require("cors");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Groq API Key는 환경변수에 저장되어 있어야 함
+// 환경변수에서 GROQ_API_KEY 가져오기
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
+
+app.use(cors());
 
 app.get("/", (req, res) => {
   res.send("Groq Proxy Server is running!");
@@ -25,25 +28,25 @@ app.get("/chat", async (req, res) => {
         model: "mixtral-8x7b-32768",
         messages: [
           { role: "system", content: "You are a helpful assistant." },
-          { role: "user", content: prompt }
-        ]
+          { role: "user", content: prompt },
+        ],
       },
       {
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${GROQ_API_KEY}`
-        }
+          Authorization: `Bearer ${GROQ_API_KEY}`,
+        },
       }
     );
 
-    const reply = response.data.choices?.[0]?.message?.content?.trim();
+    const reply = response.data.choices[0].message.content.trim();
     res.json({ reply });
   } catch (error) {
-    console.error("Groq API Error:", error.message);
-    res.status(500).json({ error: error.message });
+    console.error("Groq API error:", error?.response?.data || error.message);
+    res.status(500).json({ error: "Groq API 호출 실패" });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Groq Proxy Server running on port ${PORT}`);
 });
