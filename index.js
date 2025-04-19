@@ -1,47 +1,47 @@
-import express from "express";
-import axios from "axios";
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const fetch = require("node-fetch"); // 설치 필요
 
 const app = express();
-app.use(express.json());
+const PORT = 8080;
+
+app.use(cors());
+app.use(bodyParser.json());
+
+app.get("/", (req, res) => {
+  res.send("Groq Proxy Server is running!");
+});
 
 app.post("/chat", async (req, res) => {
   const { prompt, user } = req.body;
 
   if (!prompt) {
-    return res.json({ reply: "❗ 질문을 입력해주세요. (!대화 질문내용)" });
+    return res.status(400).json({ error: "No prompt provided" });
   }
 
   try {
-    const groqResponse = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        model: "llama3-8b-8192",
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
       },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        },
-      }
-    );
+      body: JSON.stringify({
+        messages: [{ role: "user", content: prompt }],
+        model: "mixtral-8x7b-32768"
+      })
+    });
 
-    const reply = groqResponse.data.choices[0]?.message?.content?.trim();
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content || "응답이 없습니다.";
+
     res.json({ reply });
   } catch (error) {
-    res.json({ error: error.response?.data || "❗ Groq API 호출 중 오류가 발생했습니다." });
+    res.status(500).json({ error: error.toString() });
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("✅ Groq Proxy Server is running!");
-});
-
-app.listen(3000, () => {
-  console.log("Server is running on port 3000");
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
 });
