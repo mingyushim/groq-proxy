@@ -27,8 +27,14 @@ app.get("/chat", async (req, res) => {
       {
         model: "llama3-8b-8192",
         messages: [
-          { role: "system", content: "You are a helpful assistant." },
-          { role: "user", content: prompt },
+          {
+            role: "system",
+            content: "당신은 친절하고 유능한 한국어 인공지능 비서입니다. 모든 답변은 반드시 한국어로 해주세요."
+          },
+          {
+            role: "user",
+            content: prompt
+          },
         ],
       },
       {
