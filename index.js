@@ -1,55 +1,40 @@
-const express = require('express');
-const axios = require('axios');
-const app = express();
-const port = 8080;
+import express from "express";
+import axios from "axios";
 
-// JSON 바디 파싱을 위해 필요
+const app = express();
 app.use(express.json());
 
-// 기본 루트 확인용
-app.get('/', (req, res) => {
-  res.send('Groq Proxy Server is running!');
-});
-
-// 카카오봇에서 요청할 /chat 라우트
-app.post('/chat', async (req, res) => {
+app.post("/chat", async (req, res) => {
   const { prompt, user } = req.body;
 
-  // prompt 누락 시
-  if (!prompt) {
-    return res.status(400).json({ error: 'No prompt provided' });
-  }
-
   try {
-    // Groq API 요청
     const response = await axios.post(
-      'https://api.groq.com/openai/v1/chat/completions',
+      "https://api.groq.com/openai/v1/chat/completions",
       {
-        model: 'mixtral-8x7b-32768',
+        model: "llama3-8b-8192",
         messages: [
-          { role: 'system', content: 'You are a helpful assistant.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.7,
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: prompt }
+        ]
       },
       {
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-        },
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`
+        }
       }
     );
 
-    // 응답에서 텍스트 추출
-    const reply = response.data.choices?.[0]?.message?.content?.trim();
-    res.json({ reply });
+    res.json({ reply: response.data.choices[0].message.content });
   } catch (error) {
-    console.error('Groq API Error:', error?.response?.data || error.message);
-    res.status(500).json({ error: error?.response?.data || 'Internal Server Error' });
+    res.json({ error: error.message });
   }
 });
 
-// 서버 시작
-app.listen(port, () => {
-  console.log(`✅ Server running on port ${port}`);
+app.get("/", (req, res) => {
+  res.send("Groq Proxy Server is running!");
+});
+
+app.listen(3000, () => {
+  console.log("Server is running on port 3000");
 });
