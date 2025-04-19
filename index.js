@@ -2,46 +2,33 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
-dotenv.config(); // .env에서 API 키 불러오기
+dotenv.config();
 
 const app = express();
+const port = process.env.PORT || 3000;
+
 app.use(cors());
 app.use(express.json());
 
-app.post("/", async (req, res) => {
+app.post("/chat", async (req, res) => {
   const { messages } = req.body;
 
-  if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: "❗ 올바른 messages 형식이 아닙니다." });
-  }
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "mixtral-8x7b-32768",
+      messages
+    })
+  });
 
-  try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "llama3-8b-8192",
-        messages,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (data.choices && data.choices.length > 0) {
-      res.json({ reply: data.choices[0].message.content });
-    } else {
-      res.status(500).json({ error: "⚠ Groq 응답이 없습니다." });
-    }
-  } catch (error) {
-    console.error("❌ 서버 오류:", error);
-    res.status(500).json({ error: "⚠ 서버 처리 중 오류 발생" });
-  }
+  const data = await response.json();
+  res.json(data);
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 서버 실행 중 (포트 ${PORT})`);
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
