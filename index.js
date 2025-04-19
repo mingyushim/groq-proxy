@@ -29,7 +29,7 @@ app.get("/chat", async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "당신은 친절한 한국어 AI 챗봇입니다. 모든 질문에 반드시 한국어로 대답하십시오. 영어로 번역하지 말고, 직접 한국어로 생각해서 대답하십시오. 답변은 30자 이내로 간단히 요약하세요."
+            content: "You are a friendly Korean-speaking AI chatbot. Always respond in Korean only. Do not translate from English — think and answer directly in Korean. Keep your responses concise, within 30 characters."
           },
           {
             role: "user",
