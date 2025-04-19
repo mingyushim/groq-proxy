@@ -4,8 +4,11 @@ import axios from "axios";
 const app = express();
 app.use(express.json());
 
-app.post("/chat", async (req, res) => {
-  const { prompt, user } = req.body;
+const API_KEY = process.env.GROQ_API_KEY; // Railway 환경변수 설정 필요
+
+// GET 방식 (카카오 Jsoup 대응용)
+app.get("/chat", async (req, res) => {
+  const { prompt, user } = req.query;
 
   try {
     const response = await axios.post(
@@ -20,7 +23,7 @@ app.post("/chat", async (req, res) => {
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`
+          Authorization: `Bearer ${API_KEY}`
         }
       }
     );
@@ -31,10 +34,11 @@ app.post("/chat", async (req, res) => {
   }
 });
 
+// 기본 루트 확인용
 app.get("/", (req, res) => {
   res.send("Groq Proxy Server is running!");
 });
 
 app.listen(3000, () => {
-  console.log("Server is running on port 3000");
+  console.log("✅ Server is running on port 3000");
 });
