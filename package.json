@@ -1,6 +1,7 @@
 {
   "name": "groq-proxy",
   "version": "1.0.0",
+  "description": "Proxy server for Groq API",
   "main": "index.js",
   "type": "module",
   "scripts": {
