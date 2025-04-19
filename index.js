@@ -5,10 +5,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// 헬스 체크용 루트 라우트
+app.get("/", (req, res) => {
+  res.send("Groq proxy server is running!");
+});
+
 app.post("/", async (req, res) => {
   const apiKey = process.env.GROQ_API_KEY;
 
-  // 안전 체크: API 키가 없을 경우 에러 반환
   if (!apiKey) {
     return res.status(500).json({ error: "GROQ_API_KEY is not set in environment variables." });
   }
