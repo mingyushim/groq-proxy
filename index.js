@@ -1,4 +1,4 @@
-console.log("API KEY:", process.env.GROQ_API_KEY);
+console.log("API KEY:", process.env.GROQ_API_KEY); 
 
 import express from "express";
 import cors from "cors";
