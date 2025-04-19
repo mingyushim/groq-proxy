@@ -1,47 +1,49 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const fetch = require("node-fetch"); // 설치 필요
+import express from "express";
+import axios from "axios";
 
 const app = express();
-const PORT = 8080;
+const PORT = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(bodyParser.json());
+// Groq API Key는 환경변수에 저장되어 있어야 함
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 app.get("/", (req, res) => {
   res.send("Groq Proxy Server is running!");
 });
 
-app.post("/chat", async (req, res) => {
-  const { prompt, user } = req.body;
+app.get("/chat", async (req, res) => {
+  const { prompt, user } = req.query;
 
-  if (!prompt) {
-    return res.status(400).json({ error: "No prompt provided" });
+  if (!prompt || !user) {
+    return res.status(400).json({ error: "Missing prompt or user" });
   }
 
   try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
+    const response = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "mixtral-8x7b-32768",
+        messages: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: prompt }
+        ]
       },
-      body: JSON.stringify({
-        messages: [{ role: "user", content: prompt }],
-        model: "mixtral-8x7b-32768"
-      })
-    });
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${GROQ_API_KEY}`
+        }
+      }
+    );
 
-    const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content || "응답이 없습니다.";
-
+    const reply = response.data.choices?.[0]?.message?.content?.trim();
     res.json({ reply });
   } catch (error) {
-    res.status(500).json({ error: error.toString() });
+    console.error("Groq API Error:", error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
