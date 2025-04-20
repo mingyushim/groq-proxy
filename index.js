@@ -25,7 +25,7 @@ app.get("/chat", async (req, res) => {
     const response = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
       {
-        model: "llama3-8b-8192",
+        model: "whisper-large-v3",
         messages: [
           {
             role: "system",
