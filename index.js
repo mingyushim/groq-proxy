@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
 const fs = require("fs");
+const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,17 +10,15 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 app.use(cors());
 
-const memoryFile = "./memory.json";
-let userMemory = {};
+const memoryPath = path.join(__dirname, "memory.json");
 
-// 기존 기억 로딩
-if (fs.existsSync(memoryFile)) {
-  userMemory = JSON.parse(fs.readFileSync(memoryFile, "utf8"));
+// memory.json 파일이 없으면 자동 생성
+if (!fs.existsSync(memoryPath)) {
+  fs.writeFileSync(memoryPath, JSON.stringify({}), "utf8");
 }
 
-function saveMemoryToFile() {
-  fs.writeFileSync(memoryFile, JSON.stringify(userMemory, null, 2));
-}
+// memory 불러오기
+let userMemory = JSON.parse(fs.readFileSync(memoryPath, "utf8"));
 
 app.get("/", (req, res) => {
   res.send("Groq Proxy Server is running!");
@@ -37,9 +36,11 @@ app.get("/chat", async (req, res) => {
     if (!userMemory[user]) userMemory[user] = [];
     userMemory[user].push(memory);
     if (userMemory[user].length > 5) {
-      userMemory[user].shift();
+      userMemory[user].shift(); // 기억 5개로 제한
     }
-    saveMemoryToFile();
+
+    // 기억 저장
+    fs.writeFileSync(memoryPath, JSON.stringify(userMemory), "utf8");
   }
 
   const memoryContext = userMemory[user]?.join("\n") || "";
@@ -84,5 +85,5 @@ function extractUserMemory(text) {
 }
 
 app.listen(PORT, () => {
-  console.log(`Groq Proxy Server running on port ${PORT}`);
+  console.log(`✅ Groq Proxy Server running on port ${PORT}`);
 });
