@@ -1,3 +1,13 @@
+const express = require("express");
+const axios = require("axios");
+const cors = require("cors");
+
+const app = express(); // 👈 이게 빠져 있었어!
+app.use(cors());
+
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+
+// 나머지 코드 그대로
 app.get("/chat", async (req, res) => {
   const { prompt, system, memory } = req.query;
 
@@ -8,14 +18,13 @@ app.get("/chat", async (req, res) => {
   const systemMessage = system || "You are a helpful Korean chatbot.";
   const memoryList = memory ? decodeURIComponent(memory).split("|") : [];
 
-  // memory 배열을 role 구분해서 messages 배열로 변환
   const memoryMessages = memoryList.map(text => {
     if (text.startsWith("유저: ")) {
       return { role: "user", content: text.replace("유저: ", "") };
     } else if (text.startsWith("봇: ")) {
       return { role: "assistant", content: text.replace("봇: ", "") };
     } else {
-      return { role: "user", content: text }; // 기본 fallback
+      return { role: "user", content: text };
     }
   });
 
@@ -47,4 +56,10 @@ app.get("/chat", async (req, res) => {
     console.error("Groq API error:", error?.response?.data || error.message);
     res.status(500).json({ error: "Groq API 호출 실패" });
   }
+});
+
+// 마지막에 서버 실행
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ Server listening on port ${PORT}`);
 });
