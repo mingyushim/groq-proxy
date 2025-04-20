@@ -1,25 +1,13 @@
-const express = require("express");
-const axios = require("axios");
-const cors = require("cors");
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// 환경변수에서 GROQ_API_KEY 가져오기
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-
-app.use(cors());
-
-app.get("/", (req, res) => {
-  res.send("Groq Proxy Server is running!");
-});
-
 app.get("/chat", async (req, res) => {
-  const { prompt, user } = req.query;
+  const { prompt, user, system } = req.query;
 
   if (!prompt || !user) {
     return res.status(400).json({ error: "Missing prompt or user" });
   }
+
+  const systemMessage = system
+    ? system
+    : "능글맞은 한국인 친구처럼 답해줘 답은 20자를 넘으면안돼"; // 한국어로 통일
 
   try {
     const response = await axios.post(
@@ -29,11 +17,14 @@ app.get("/chat", async (req, res) => {
         messages: [
           {
             role: "system",
-            content:
-              "능글맞은 한국인 친구처럼 답해줘 답은 20자를 넘으면안돼",
+            content: systemMessage,
           },
-          { role: "user", content: prompt },
+          {
+            role: "user",
+            content: prompt,
+          },
         ],
+        max_tokens: 200,
       },
       {
         headers: {
@@ -49,8 +40,4 @@ app.get("/chat", async (req, res) => {
     console.error("Groq API error:", error?.response?.data || error.message);
     res.status(500).json({ error: "Groq API 호출 실패" });
   }
-});
-
-app.listen(PORT, () => {
-  console.log(`Groq Proxy Server running on port ${PORT}`);
 });
