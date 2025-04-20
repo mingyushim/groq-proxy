@@ -1,6 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
+const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,7 +9,17 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 app.use(cors());
 
-const userMemory = {};
+const memoryFile = "./memory.json";
+let userMemory = {};
+
+// 기존 기억 로딩
+if (fs.existsSync(memoryFile)) {
+  userMemory = JSON.parse(fs.readFileSync(memoryFile, "utf8"));
+}
+
+function saveMemoryToFile() {
+  fs.writeFileSync(memoryFile, JSON.stringify(userMemory, null, 2));
+}
 
 app.get("/", (req, res) => {
   res.send("Groq Proxy Server is running!");
@@ -28,6 +39,7 @@ app.get("/chat", async (req, res) => {
     if (userMemory[user].length > 5) {
       userMemory[user].shift();
     }
+    saveMemoryToFile();
   }
 
   const memoryContext = userMemory[user]?.join("\n") || "";
@@ -41,7 +53,7 @@ app.get("/chat", async (req, res) => {
           {
             role: "system",
             content:
-              "You are a friendly Korean-speaking AI chatbot. Always respond in Korean only. Do not translate from English — think and answer directly in Korean. Keep your responses concise, within 20 characters.\n" + memoryContext,
+              "능글맞은 한국인 친구처럼 답해줘 답은 20자를 넘으면안돼\n" + memoryContext,
           },
           { role: "user", content: prompt },
         ],
