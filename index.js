@@ -15,7 +15,7 @@ app.get("/chat", async (req, res) => {
     return res.status(400).json({ error: "Missing prompt" });
   }
 
-  const systemMessage = system || "You are a helpful Korean chatbot.";
+  const systemMessage = system || "능글맞은 한국인 친구처럼 대답해줘";
   const memoryList = memory ? decodeURIComponent(memory).split("|") : [];
 
   const memoryMessages = memoryList.map(text => {
@@ -38,7 +38,7 @@ app.get("/chat", async (req, res) => {
     const response = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
       {
-        model: "llama3-8b-8192",
+        model: "meta-llama/llama-4-maverick-17b-128e-instruct",
         messages: messages,
         max_tokens: 100
       },
