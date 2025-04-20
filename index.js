@@ -1,45 +1,43 @@
-const express = require("express");
-const axios = require("axios");
-const cors = require("cors");
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// 환경변수에서 GROQ_API_KEY 가져오기
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-
-app.use(cors());
-
-app.get("/", (req, res) => {
-  res.send("Groq Proxy Server is running!");
-});
-
 app.get("/chat", async (req, res) => {
-  const { prompt, user } = req.query;
+  const { prompt, system, memory } = req.query;
 
-  if (!prompt || !user) {
-    return res.status(400).json({ error: "Missing prompt or user" });
+  if (!prompt) {
+    return res.status(400).json({ error: "Missing prompt" });
   }
+
+  const systemMessage = system || "You are a helpful Korean chatbot.";
+  const memoryList = memory ? decodeURIComponent(memory).split("|") : [];
+
+  // memory 배열을 role 구분해서 messages 배열로 변환
+  const memoryMessages = memoryList.map(text => {
+    if (text.startsWith("유저: ")) {
+      return { role: "user", content: text.replace("유저: ", "") };
+    } else if (text.startsWith("봇: ")) {
+      return { role: "assistant", content: text.replace("봇: ", "") };
+    } else {
+      return { role: "user", content: text }; // 기본 fallback
+    }
+  });
+
+  const messages = [
+    { role: "system", content: systemMessage },
+    ...memoryMessages,
+    { role: "user", content: prompt }
+  ];
 
   try {
     const response = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
       {
-        model: "meta-llama/llama-4-maverick-17b-128e-instruct",
-        messages: [
-          {
-            role: "system",
-            content:
-              "능글맞은 한국인 친구처럼 답해줘 답은 20자를 넘으면안돼",
-          },
-          { role: "user", content: prompt },
-        ],
+        model: "llama3-8b-8192",
+        messages: messages,
+        max_tokens: 100
       },
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${GROQ_API_KEY}`,
-        },
+          Authorization: `Bearer ${GROQ_API_KEY}`
+        }
       }
     );
 
@@ -49,8 +47,4 @@ app.get("/chat", async (req, res) => {
     console.error("Groq API error:", error?.response?.data || error.message);
     res.status(500).json({ error: "Groq API 호출 실패" });
   }
-});
-
-app.listen(PORT, () => {
-  console.log(`Groq Proxy Server running on port ${PORT}`);
 });
