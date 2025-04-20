@@ -1,30 +1,26 @@
 app.get("/chat", async (req, res) => {
-  const { prompt, user, system } = req.query;
+  const { prompt, user, system } = req.query;  // system 추가
 
   if (!prompt || !user) {
     return res.status(400).json({ error: "Missing prompt or user" });
   }
 
-  const systemMessage = system
-    ? system
-    : "능글맞은 한국인 친구처럼 답해줘 답은 20자를 넘으면안돼"; // 한국어로 통일
+  // 기본 system 메시지
+  const systemMessage = system || "You are a helpful Korean chatbot.";
 
   try {
     const response = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
       {
-        model: "meta-llama/llama-4-maverick-17b-128e-instruct",
+        model: "llama3-8b-8192",
         messages: [
           {
             role: "system",
-            content: systemMessage,
+            content: systemMessage, // 여기에 system 반영
           },
-          {
-            role: "user",
-            content: prompt,
-          },
+          { role: "user", content: prompt },
         ],
-        max_tokens: 200,
+        max_tokens: 100,
       },
       {
         headers: {
