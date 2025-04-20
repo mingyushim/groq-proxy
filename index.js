@@ -15,7 +15,7 @@ app.get("/chat", async (req, res) => {
     return res.status(400).json({ error: "Missing prompt" });
   }
 
-  const systemMessage = system || "능글맞은 한국인 친구처럼 대답해줘";
+  const systemMessage = system || "능글맞은 한국인 친구처럼 20자 내로 대답해줘";
   const memoryList = memory ? decodeURIComponent(memory).split("|") : [];
 
   const memoryMessages = memoryList.map(text => {
