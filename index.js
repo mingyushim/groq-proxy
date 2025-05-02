@@ -15,8 +15,8 @@ app.get("/chat", async (req, res) => {
   }
 
   // ✅ !랭킹 캐릭터명 요청 처리
-  if (prompt.startsWith("!랭킹")) {
-    const keyword = prompt.replace("!랭킹", "").trim();
+  if (prompt.startsWith("랭킹")) {
+    const keyword = prompt.replace("랭킹", "").trim();
 
     if (!keyword) {
       return res.json({ reply: "캐릭터명을 입력해 주세요." });
