@@ -21,7 +21,8 @@ app.get("/chat", async (req, res) => {
       return res.json({ reply: "!룬 [숫자] 형식으로 입력해주세요 (예: !룬 1)" });
     }
 
-    const klass = parts[1];
+    const klassRaw = parts[1];
+    const klass = klassRaw.padStart(2, '0');  // '1' → '01' 처리
     const apiUrl = `https://mabimobi.life/d/api/v1/rune-tiers?klass=${klass}`;
 
     try {
