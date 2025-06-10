@@ -14,48 +14,6 @@ app.get("/chat", async (req, res) => {
     return res.status(400).json({ error: "Missing prompt" });
   }
 
-  // === !룬 명령 처리 ===
-  if (prompt.startsWith("!룬")) {
-    const parts = prompt.trim().split(" ");
-    if (parts.length < 2) {
-      return res.json({ reply: "!룬 [숫자] 형식으로 입력해주세요 (예: !룬 1)" });
-    }
-
-    const klassRaw = parts[1];
-    const klass = klassRaw.padStart(2, '0');  // '1' → '01' 처리
-    const apiUrl = `https://mabimobi.life/d/api/v1/rune-tiers?klass=${klass}`;
-
-    try {
-      const response = await axios.get(apiUrl, {
-        headers: {
-          'Accept': 'application/json',
-          'Referer': 'https://mabimobi.life/runes',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-        }
-      });
-
-      const data = response.data;
-
-      // 1티어 룬 추출 (tier === 1)
-      const tier1 = data?.tiers?.find(t => t.tier === 1);
-      const tier1Runes = tier1?.runes || [];
-
-      if (tier1Runes.length === 0) {
-        return res.json({ reply: `klass=${klass}에 대한 1티어 룬 정보를 찾을 수 없습니다.` });
-      }
-
-      // 텍스트 구성
-      const replyText = `📜 ${klass}번 직업 1티어 룬 목록:\n` +
-        tier1Runes.map(rune => `- ${rune.name}`).join("\n");
-
-      return res.json({ reply: replyText });
-    } catch (error) {
-      console.error("룬 API error:", error?.response?.data || error.message);
-      return res.status(500).json({ reply: "룬 정보를 가져오는 중 오류가 발생했습니다." });
-    }
-  }
-
-  // === 기존 Groq API 처리 ===
   const systemMessage = system || "센스있고 능글맞은 한국인 친구처럼 20자 내로 대답해줘";
   const memoryList = memory ? decodeURIComponent(memory).split("|") : [];
 
@@ -69,6 +27,47 @@ app.get("/chat", async (req, res) => {
     }
   });
 
+  // !룬 N 형식 명령어 처리
+  if (prompt.startsWith("!룬 ")) {
+    const runeNumber = prompt.split(" ")[1];
+    console.log(`🛠️ 디버깅: !룬 명령어 감지, 번호: ${runeNumber}`);
+
+    // klass 파라미터 2자리 형식으로 맞추기 (1 -> 01)
+    const klassParam = runeNumber.padStart(2, "0");
+    const runeApiUrl = `https://mabimobi.life/d/api/v1/rune-tiers?klass=${klassParam}`;
+    console.log(`🛠️ 디버깅: mabimobi API 호출 URL: ${runeApiUrl}`);
+
+    try {
+      const runeResponse = await axios.get(runeApiUrl, {
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+      console.log("🛠️ 디버깅: mabimobi API 응답 데이터:", runeResponse.data);
+
+      const runeData = runeResponse.data;
+      if (!runeData || !runeData.tiers || runeData.tiers.length === 0) {
+        return res.json({ reply: `${klassParam}에 대한 티어 룬 정보를 찾을 수 없습니다.` });
+      }
+
+      // 예: 1티어 룬들 텍스트로 만들기
+      const tier1 = runeData.tiers.find(t => t.tier === 1);
+      if (!tier1 || !tier1.runes) {
+        return res.json({ reply: `${klassParam} 1티어 룬 정보를 찾을 수 없습니다.` });
+      }
+
+      const runeNames = tier1.runes.map(r => r.name).join(", ");
+      const replyText = `${klassParam} 1티어 룬: ${runeNames}`;
+      console.log(`🛠️ 디버깅: 생성할 답변 텍스트: ${replyText}`);
+
+      return res.json({ reply: replyText });
+    } catch (error) {
+      console.error("🛠️ 디버깅: mabimobi API 호출 에러:", error.response?.data || error.message);
+      return res.json({ reply: "룬 정보 조회 중 오류가 발생했습니다." });
+    }
+  }
+
+  // 일반 프롬프트는 Groq API 호출
   const messages = [
     { role: "system", content: systemMessage },
     ...memoryMessages,
@@ -76,6 +75,8 @@ app.get("/chat", async (req, res) => {
   ];
 
   try {
+    console.log("🛠️ 디버깅: Groq API 호출 메시지:", messages);
+
     const response = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
       {
@@ -92,9 +93,11 @@ app.get("/chat", async (req, res) => {
     );
 
     const reply = response.data.choices[0].message.content.trim();
+    console.log("🛠️ 디버깅: Groq API 응답:", reply);
+
     res.json({ reply });
   } catch (error) {
-    console.error("Groq API error:", error?.response?.data || error.message);
+    console.error("🛠️ 디버깅: Groq API 호출 에러:", error.response?.data || error.message);
     res.status(500).json({ error: "Groq API 호출 실패" });
   }
 });
