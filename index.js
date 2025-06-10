@@ -2,12 +2,11 @@ const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
 
-const app = express(); // 👈 이게 빠져 있었어!
+const app = express();
 app.use(cors());
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// 나머지 코드 그대로
 app.get("/chat", async (req, res) => {
   const { prompt, system, memory } = req.query;
 
@@ -15,6 +14,40 @@ app.get("/chat", async (req, res) => {
     return res.status(400).json({ error: "Missing prompt" });
   }
 
+  // === !룬 명령 처리 ===
+  if (prompt.startsWith("!룬")) {
+    const parts = prompt.trim().split(" ");
+    if (parts.length < 2) {
+      return res.json({ reply: "!룬 [숫자] 형식으로 입력해주세요 (예: !룬 1)" });
+    }
+
+    const klass = parts[1];
+    const apiUrl = `https://mabimobi.life/d/api/v1/rune-tiers?klass=${klass}`;
+
+    try {
+      const response = await axios.get(apiUrl);
+      const data = response.data;
+
+      // 1티어 룬 추출 (tier === 1)
+      const tier1 = data?.tiers?.find(t => t.tier === 1);
+      const tier1Runes = tier1?.runes || [];
+
+      if (tier1Runes.length === 0) {
+        return res.json({ reply: `klass=${klass}에 대한 1티어 룬 정보를 찾을 수 없습니다.` });
+      }
+
+      // 텍스트 구성
+      const replyText = `📜 ${klass}번 직업 1티어 룬 목록:\n` +
+        tier1Runes.map(rune => `- ${rune.name}`).join("\n");
+
+      return res.json({ reply: replyText });
+    } catch (error) {
+      console.error("룬 API error:", error?.response?.data || error.message);
+      return res.status(500).json({ reply: "룬 정보를 가져오는 중 오류가 발생했습니다." });
+    }
+  }
+
+  // === 기존 Groq API 처리 ===
   const systemMessage = system || "센스있고 능글맞은 한국인 친구처럼 20자 내로 대답해줘";
   const memoryList = memory ? decodeURIComponent(memory).split("|") : [];
 
@@ -58,8 +91,7 @@ app.get("/chat", async (req, res) => {
   }
 });
 
-// 마지막에 서버 실행
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Server listening on port ${PORT}`);
-}); 
+});
