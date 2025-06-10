@@ -28,14 +28,15 @@ app.get("/chat", async (req, res) => {
       console.log("🛠️ 디버깅: mabimobi API 호출 URL:", runeApiUrl);
 
       const runeResponse = await axios.get(runeApiUrl, {
-        headers: {
-          Accept: "application/json",
-          "Accept-Encoding": "gzip, deflate, br, zstd",
-          "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
-        },
-      });
+  headers: {
+    Accept: "application/json",
+    "Accept-Encoding": "gzip, deflate",  // ⬅️ zstd 제거!
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+  },
+});
+
 
       console.log("🛠️ 디버깅: API 응답 데이터:", runeResponse.data);
 
