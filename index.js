@@ -41,39 +41,23 @@ app.get("/chat", async (req, res) => {
         return res.json({ reply: `${klass}에 대한 1티어 룬이 없습니다.` });
       }
 
-      // 카테고리 한글 매핑
+      // 카테고리 매핑
       const categoryMap = {
         "01": "무기",
-        "02": "앰블럼",
-        "03": "방어구"
+        "02": "방어구",
+        "03": "악세사리",
+        "04": "앰블럼"
       };
 
-      // 분류 결과 객체 초기화
-      const classified = {
-        무기: [],
-        앰블럼: [],
-        방어구: [],
-        기타: []
-      };
-
-      // 분류
-      tier1Runes.forEach(item => {
-        const catKey = item.rune.category;
-        const catName = categoryMap[catKey] || "기타";
-        classified[catName].push(item.rune.name);
+      // 1티어 룬 이름과 카테고리 분류해서 문자열 생성
+      const runeInfoStrings = tier1Runes.map(r => {
+        const categoryName = categoryMap[r.rune.category] || "기타";
+        return `${r.rune.name}(${categoryName})`;
       });
 
-      // 문자열 조합
-      let replyParts = [];
-      for (const [key, names] of Object.entries(classified)) {
-        if (names.length > 0) {
-          replyParts.push(`${key}: ${names.join(", ")}`);
-        }
-      }
+      const replyText = `${klass} 직업의 1티어 룬: ${runeInfoStrings.join(", ")}`;
 
-      const replyMessage = `${klass} 직업의 1티어 룬 분류\n` + replyParts.join("\n");
-
-      return res.json({ reply: replyMessage });
+      return res.json({ reply: replyText });
 
     } catch (error) {
       console.error("룬 API 호출 오류:", error.response?.data || error.message);
