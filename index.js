@@ -14,6 +14,64 @@ app.get("/chat", async (req, res) => {
     return res.status(400).json({ error: "Missing prompt" });
   }
 
+  // 룬 명령어 처리
+  if (prompt.startsWith("!룬")) {
+    const parts = prompt.split(" ");
+    let klassCode = parts[1];
+
+    if (!klassCode) {
+      return res.json({ reply: "룬 명령어 사용법: !룬 숫자(예: !룬 01)" });
+    }
+
+    // 한 자리면 01, 02 ... 처럼 자동으로 앞에 0 추가
+    if (klassCode.length === 1) {
+      klassCode = "0" + klassCode;
+    }
+
+    if (klassCode.length !== 2) {
+      return res.json({ reply: "룬 명령어 사용법: !룬 숫자(예: !룬 01)" });
+    }
+
+    try {
+      const runeApiUrl = `https://mabimobi.life/d/api/v1/rune-tiers?klass=${klassCode}`;
+      console.log("🛠️ 디버깅: mabimobi API 호출 URL:", runeApiUrl);
+
+      const runeResponse = await axios.get(runeApiUrl, {
+        headers: {
+          Accept: "application/json",
+          "Accept-Encoding": "gzip, deflate, br, zstd",
+          "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+        }
+      });
+
+      console.log("🛠️ 디버깅: API 응답 데이터:", runeResponse.data);
+
+      const runeData = runeResponse.data;
+      if (!runeData || !Array.isArray(runeData) || runeData.length === 0) {
+        return res.json({ reply: `${klassCode}에 대한 티어 룬 정보를 찾을 수 없습니다.` });
+      }
+
+      // 1티어 룬만 추출
+      const tier1Runes = runeData.filter(item => item.tier === 1);
+
+      if (tier1Runes.length === 0) {
+        return res.json({ reply: `${klassCode}에 대한 1티어 룬 정보를 찾을 수 없습니다.` });
+      }
+
+      // 룬 이름들 모아서 출력용 문자열 만들기
+      const runeNames = tier1Runes.map(item => item.runeName).join(", ");
+      const replyMessage = `${klassCode} 클래스의 1티어 룬: ${runeNames}`;
+
+      return res.json({ reply: replyMessage });
+
+    } catch (error) {
+      console.error("🛠️ 디버깅: mabimobi API 호출 오류:", error?.response?.data || error.message);
+      return res.status(500).json({ error: "룬 정보 호출 실패" });
+    }
+  }
+
+  // 기본 Chat 기능 (Groq API 호출)
   const systemMessage = system || "센스있고 능글맞은 한국인 친구처럼 20자 내로 대답해줘";
   const memoryList = memory ? decodeURIComponent(memory).split("|") : [];
 
@@ -33,48 +91,6 @@ app.get("/chat", async (req, res) => {
     { role: "user", content: prompt }
   ];
 
-  // !룬 명령어 처리
-  if (prompt.startsWith("!룬")) {
-    const parts = prompt.split(" ");
-    const klassCode = parts[1];
-
-    if (!klassCode || klassCode.length !== 2) {
-      return res.json({ reply: "룬 명령어 사용법: !룬 숫자(예: !룬 01)" });
-    }
-
-    const runeApiUrl = `https://mabimobi.life/d/api/v1/rune-tiers?klass=${klassCode}`;
-    console.log("🛠️ 디버깅: mabimobi API 호출 URL:", runeApiUrl);
-
-    try {
-      const runeResponse = await axios.get(runeApiUrl, {
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
-        }
-      });
-
-      const runeData = runeResponse.data;
-      console.log("🛠️ 디버깅: mabimobi API 응답 데이터:", runeData);
-
-      if (!runeData || !runeData.tiers || runeData.tiers.length === 0) {
-        return res.json({ reply: `${klassCode}에 대한 티어 룬 정보를 찾을 수 없습니다.` });
-      }
-
-      const tier1Runes = runeData.tiers.find(tier => tier.tier === 1);
-      if (!tier1Runes || !tier1Runes.runes || tier1Runes.runes.length === 0) {
-        return res.json({ reply: `${klassCode}에 대한 1티어 룬 정보를 찾을 수 없습니다.` });
-      }
-
-      // 룬 이름만 추출
-      const runeNames = tier1Runes.runes.map(rune => rune.name).join(", ");
-      return res.json({ reply: `1티어 룬: ${runeNames}` });
-    } catch (error) {
-      console.error("mabimobi API 호출 에러:", error?.response?.data || error.message);
-      return res.status(500).json({ error: "mabimobi API 호출 실패" });
-    }
-  }
-
-  // 기본 GROQ API 처리
   try {
     const response = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
@@ -99,7 +115,7 @@ app.get("/chat", async (req, res) => {
   }
 });
 
-// 마지막에 서버 실행
+// 서버 실행
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Server listening on port ${PORT}`);
