@@ -49,15 +49,34 @@ app.get("/chat", async (req, res) => {
         "04": "앰블럼"
       };
 
-      // 1티어 룬 이름과 카테고리 분류해서 문자열 생성
-      const runeInfoStrings = tier1Runes.map(r => {
+      // 카테고리별로 그룹화
+      const groupedRunes = {};
+
+      tier1Runes.forEach(r => {
         const categoryName = categoryMap[r.rune.category] || "기타";
-        return `${r.rune.name}(${categoryName})`;
+
+        // 특수문자 제거 (카카오 메시지 안전하게 처리)
+        const safeRuneName = r.rune.name
+          .replace(/[\n\r\t]/g, " ")
+          .replace(/[<>]/g, "")
+          .trim();
+
+        // 그룹에 추가
+        if (!groupedRunes[categoryName]) {
+          groupedRunes[categoryName] = [];
+        }
+        groupedRunes[categoryName].push(safeRuneName);
       });
 
-      const replyText = `${klass} 직업의 1티어 룬: ${runeInfoStrings.join(", ")}`;
+      // 카테고리별로 문자열 구성
+      let replyText = `${klass} 직업의 1티어 룬:\n`;
 
-      return res.json({ reply: replyText });
+      Object.keys(groupedRunes).forEach(category => {
+        replyText += `\n[${category}]\n`;
+        replyText += groupedRunes[category].join(" · ") + "\n";
+      });
+
+      return res.json({ reply: replyText.trim() });
 
     } catch (error) {
       console.error("룬 API 호출 오류:", error.response?.data || error.message);
