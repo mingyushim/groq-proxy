@@ -25,7 +25,7 @@ app.get("/chat", async (req, res) => {
 
     try {
       // 룬 API 호출
-      const response = await axios.get(https://mabimobi.life/d/api/v1/rune-tiers?klass=${klass}, {
+      const response = await axios.get(`https://mabimobi.life/d/api/v1/rune-tiers?klass=${klass}`, {
         headers: {
           "Accept": "application/json",
           "Content-Type": "application/json"
@@ -38,26 +38,13 @@ app.get("/chat", async (req, res) => {
       const tier1Runes = runes.filter(r => r.tier === 1);
 
       if (tier1Runes.length === 0) {
-        return res.json({ reply: ${klass}에 대한 1티어 룬이 없습니다. });
+        return res.json({ reply: `${klass}에 대한 1티어 룬이 없습니다.` });
       }
 
-      // 카테고리 매핑
-      const categoryMap = {
-        "01": "무기",
-        "02": "방어구",
-        "03": "악세사리",
-        "04": "앰블럼"
-      };
+      // 1티어 룬 이름만 모아서 문자열 생성
+      const runeNames = tier1Runes.map(r => r.rune.name).join(", ");
 
-      // 1티어 룬 이름과 카테고리 분류해서 문자열 생성
-      const runeInfoStrings = tier1Runes.map(r => {
-        const categoryName = categoryMap[r.rune.category] || "기타";
-        return ${r.rune.name}(${categoryName});
-      });
-
-      const replyText = ${klass} 직업의 1티어 룬: ${runeInfoStrings.join(", ")};
-
-      return res.json({ reply: replyText });
+      return res.json({ reply: `${klass} 직업의 1티어 룬: ${runeNames}` });
 
     } catch (error) {
       console.error("룬 API 호출 오류:", error.response?.data || error.message);
@@ -97,7 +84,7 @@ app.get("/chat", async (req, res) => {
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: Bearer ${GROQ_API_KEY}
+          Authorization: `Bearer ${GROQ_API_KEY}`
         }
       }
     );
@@ -112,5 +99,5 @@ app.get("/chat", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(✅ Server listening on port ${PORT});
+  console.log(`✅ Server listening on port ${PORT}`);
 });
