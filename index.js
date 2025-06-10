@@ -26,7 +26,14 @@ app.get("/chat", async (req, res) => {
     const apiUrl = `https://mabimobi.life/d/api/v1/rune-tiers?klass=${klass}`;
 
     try {
-      const response = await axios.get(apiUrl);
+      const response = await axios.get(apiUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'Referer': 'https://mabimobi.life/runes',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+        }
+      });
+
       const data = response.data;
 
       // 1티어 룬 추출 (tier === 1)
