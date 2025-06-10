@@ -41,10 +41,42 @@ app.get("/chat", async (req, res) => {
         return res.json({ reply: `${klass}에 대한 1티어 룬이 없습니다.` });
       }
 
-      // 1티어 룬 이름만 모아서 문자열 생성
-      const runeNames = tier1Runes.map(r => r.rune.name).join(", ");
+      // 카테고리 매핑
+      const categoryMap = {
+        "01": "무기",
+        "02": "방어구",
+        "03": "악세사리",
+        "04": "앰블럼"
+      };
 
-      return res.json({ reply: `${klass} 직업의 1티어 룬: ${runeNames}` });
+      // 카테고리별로 그룹화
+      const groupedRunes = {};
+
+      tier1Runes.forEach(r => {
+        const categoryName = categoryMap[r.rune.category] || "기타";
+
+        // 특수문자 제거 (카카오 메시지 안전하게 처리)
+        const safeRuneName = r.rune.name
+          .replace(/[\n\r\t]/g, " ")
+          .replace(/[<>]/g, "")
+          .trim();
+
+        // 그룹에 추가
+        if (!groupedRunes[categoryName]) {
+          groupedRunes[categoryName] = [];
+        }
+        groupedRunes[categoryName].push(safeRuneName);
+      });
+
+      // 카테고리별로 문자열 구성
+      let replyText = `${klass} 직업의 1티어 룬:\n`;
+
+      Object.keys(groupedRunes).forEach(category => {
+        replyText += `\n[${category}]\n`;
+        replyText += groupedRunes[category].join(" · ") + "\n";
+      });
+
+      return res.json({ reply: replyText.trim() });
 
     } catch (error) {
       console.error("룬 API 호출 오류:", error.response?.data || error.message);
