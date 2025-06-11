@@ -23,7 +23,7 @@ const SERVER_NAME_MAP = {
 // 심층 구멍 상태 확인
 async function fetchOpenServers() {
   try {
-    const res = await axios.get("https://mabimobi.life/d/api/v1/deep-hole-reports");
+    const res = await axios.get("https://mabimobi.life/d/api/v1/main/deep-hole");
     const now = new Date();
     const valid = res.data.filter(entry => new Date(entry.expired) > now);
     const latestByServer = {};
