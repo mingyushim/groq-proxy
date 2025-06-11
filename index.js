@@ -118,73 +118,54 @@ app.get("/chat", async (req, res) => {
   }
 });
 
-// ==================== 추가된 심층구멍 알림 기능 ====================
+// ==================== 던컨 서버 심층구멍 알림 기능 ====================
 const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1382217136667230218/mwewhH4pp6kOjvWGji_9ZfsTdFeVUmwD2T_tAjWNbV4CFCTdRpRpdj4-0JSmuL8tTNN7";
 const DEEP_HOLE_API_URL = "https://mabimobi.life/d/api/v1/main/deep-hole";
 
-const SERVER_MAP = {
-  "01": "데이안",
-  "02": "아이라",
-  "03": "던컨",
-  "04": "알리사",
-  "05": "메이븐",
-  "06": "라사",
-  "07": "칼릭스"
-};
+let previousStatus = null;
 
-let previousStatusMap = {};  // 서버별 이전 상태 기억
-
-async function sendEmbedAlert(serverCode, status, imageUrl) {
-  const serverName = SERVER_MAP[serverCode] || serverCode;
+async function sendDuncanAlert(status) {
   const embed = {
-    title: `${serverName} 서버 심층구멍`,
+    title: `던컨 서버 심층구멍`,
     description: status === "열렸심" ? "🔵 열렸심" : "🔴 닫혔심",
-    color: status === "열렸심" ? 0x00ff00 : 0xff0000,
-    image: { url: imageUrl }
+    color: status === "열렸심" ? 0x00ff00 : 0xff0000
   };
 
   try {
     await axios.post(DISCORD_WEBHOOK_URL, { embeds: [embed] });
-    console.log(`[✅ 알림] ${serverName}: ${status}`);
+    console.log(`[✅ 알림] 던컨: ${status}`);
   } catch (err) {
     console.error("웹훅 전송 오류:", err.response?.data || err.message);
   }
 }
 
-async function checkDeepHoleStatus() {
+async function checkDuncanStatus() {
   try {
     const response = await axios.get(DEEP_HOLE_API_URL);
     const data = response.data;
 
-    // 서버별 최신 데이터만 추림
-    const latestByServer = {};
-    for (const item of data) {
-      const sid = item.server;
-      if (!latestByServer[sid] || new Date(item.expired) > new Date(latestByServer[sid].expired)) {
-        latestByServer[sid] = item;
-      }
-    }
+    const duncanData = data
+      .filter(item => item.server === "03")
+      .sort((a, b) => new Date(b.expired) - new Date(a.expired))[0];
 
-    for (const sid of Object.keys(SERVER_MAP)) {
-      const latest = latestByServer[sid];
-      const now = new Date();
-      const isOpen = latest && new Date(latest.expired) > now;
-      const status = isOpen ? "열렸심" : "닫혔심";
-      const imageUrl = latest?.image || "";
+    if (!duncanData) return;
 
-      if (previousStatusMap[sid] === undefined || previousStatusMap[sid] !== status) {
-        await sendEmbedAlert(sid, status, imageUrl);
-        previousStatusMap[sid] = status;
-      }
+    const now = new Date();
+    const isOpen = new Date(duncanData.expired) > now;
+    const status = isOpen ? "열렸심" : "닫혔심";
+
+    if (previousStatus === null || previousStatus !== status) {
+      await sendDuncanAlert(status);
+      previousStatus = status;
     }
   } catch (error) {
-    console.error("심층구멍 상태 확인 실패:", error.response?.data || error.message);
+    console.error("던컨 상태 확인 실패:", error.response?.data || error.message);
   }
 }
 
-// 최초 호출 + 1분마다 체크
-checkDeepHoleStatus();
-setInterval(checkDeepHoleStatus, 60 * 1000);
+// 최초 호출 + 1분마다 반복
+checkDuncanStatus();
+setInterval(checkDuncanStatus, 60 * 1000);
 
 // ==================== 서버 시작 ====================
 const PORT = process.env.PORT || 3000;
