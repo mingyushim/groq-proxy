@@ -18,50 +18,39 @@ const serverNameMap = {
   "07": "칼릭스"
 };
 
-// ========== 📡 딥홀 상태 체크 기능 ==========
+// ========== 📡 딥홀 상태 정기 알림 ==========
 const DEEP_HOLE_API = "https://mabimobi.life/d/api/v1/main/deep-hole";
 const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1382217136667230218/mwewhH4pp6kOjvWGji_9ZfsTdFeVUmwD2T_tAjWNbV4CFCTdRpRpdj4-0JSmuL8tTNN7";
 
-// 이전 상태 저장소
-let lastStates = {};
-
-const checkDeepHoleState = async () => {
+const sendDeepHoleStatusToDiscord = async () => {
   try {
     const response = await axios.get(DEEP_HOLE_API);
     const servers = response.data;
 
-    for (const server of servers) {
+    // 서버별 상태 메시지 배열 생성
+    const statusMessages = servers.map(server => {
       const serverId = server.server;
       const serverName = serverNameMap[serverId] || serverId;
-      const currentState = server.state;
-      const prevState = lastStates[serverId];
+      const state = server.state === "area" ? "심층구멍 생겻심" : "심층구멍없심";
+      return `${serverName} 서버: ${state}`;
+    });
 
-      if (prevState !== undefined && prevState !== currentState) {
-        const messageText = currentState === "area" ? "심층구멍 생겻심" : "심층구멍 없심";
+    const content = `📡 딥홀 상태 알림:\n` + statusMessages.join("\n");
 
-        const message = {
-          content: `📡 ${serverName} 서버 상태 변경: ${messageText}`
-        };
-
-        await axios.post(DISCORD_WEBHOOK_URL, message, {
-          headers: {
-            "Content-Type": "application/json"
-          }
-        });
-
-        console.log(`🔔 상태 변경: ${serverName} (${serverId}) - ${prevState} → ${currentState}`);
+    await axios.post(DISCORD_WEBHOOK_URL, { content }, {
+      headers: {
+        "Content-Type": "application/json"
       }
+    });
 
-      lastStates[serverId] = currentState;
-    }
   } catch (error) {
-    console.error("딥홀 상태 확인 중 오류:", error?.response?.data || error.message);
+    console.error("딥홀 상태 알림 전송 중 오류:", error?.response?.data || error.message);
   }
 };
 
-// 시작 시 한 번 실행하고, 1분마다 반복
-checkDeepHoleState();
-setInterval(checkDeepHoleState, 60 * 1000);
+// 서버 시작 시 및 1분마다 실행
+sendDeepHoleStatusToDiscord();
+setInterval(sendDeepHoleStatusToDiscord, 60 * 1000);
 
 // ========== 💬 챗 및 룬 명령어 처리 ==========
 app.get("/chat", async (req, res) => {
@@ -71,7 +60,6 @@ app.get("/chat", async (req, res) => {
     return res.status(400).json({ error: "Missing prompt" });
   }
 
-  // 룬 명령어 처리
   if (prompt.startsWith("!룬")) {
     const parts = prompt.split(" ");
     if (parts.length < 2) {
