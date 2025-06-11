@@ -4,83 +4,69 @@ const cors = require("cors");
 
 const app = express();
 app.use(cors());
+
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const PORT = process.env.PORT || 3000;
+const DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1382217136667230218/mwewhH4pp6kOjvWGji_9ZfsTdFeVUmwD2T_tAjWNbV4CFCTdRpRpdj4-0JSmuL8tTNN7";
 
-const DEEP_HOLE_API = "https://mabimobi.life/d/api/v1/main/deep-hole";
-const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1382217136667230218/mwewhH4pp6kOjvWGji_9ZfsTdFeVUmwD2T_tAjWNbV4CFCTdRpRpdj4-0JSmuL8tTNN7";
+let previousOpenServers = [];
 
-const serverNameMap = {
-  "01": "데이안",
-  "02": "아이라",
-  "03": "던컨",
-  "04": "알리사",
-  "05": "메이븐",
-  "06": "라사",
-  "07": "칼릭스"
-};
-
-let lastStatusMap = {};
-let firstCheckDone = false;
-
-async function checkDeepHoleStatus() {
+// 심층 구멍 오픈 서버 가져오기
+async function fetchOpenServers() {
   try {
-    const { data } = await axios.get(DEEP_HOLE_API);
+    const res = await axios.get("https://mabimobi.life/d/api/v1/deep-hole-reports");
+    const now = new Date();
+    const valid = res.data.filter(entry => new Date(entry.expired) > now);
+    const latestByServer = {};
 
-    const openMap = {};
-    data.forEach(entry => {
-      if (entry.area && entry.server) {
-        openMap[entry.server] = entry.area;
+    // 서버별 가장 최신 데이터 유지
+    valid.forEach(item => {
+      const s = item.server;
+      if (!latestByServer[s] || new Date(item.expired) > new Date(latestByServer[s].expired)) {
+        latestByServer[s] = item;
       }
     });
 
-    const lines = [];
-    const changed = [];
-
-    Object.entries(serverNameMap).forEach(([id, name]) => {
-      const isOpen = id in openMap;
-      const area = openMap[id];
-      const line = isOpen
-        ? `${name}: 🔴 심층구멍 생겻심 (${area})`
-        : `${name}: ⚪ 심층구멍없심`;
-      lines.push(line);
-
-      const prev = lastStatusMap[id];
-      if (firstCheckDone && prev !== isOpen) {
-        changed.push({ id, name, isOpen, area });
-      }
-
-      lastStatusMap[id] = isOpen;
-    });
-
-    if (!firstCheckDone) {
-      const content = "📡 딥홀 상태 초기화:\n" + lines.join("\n");
-      await axios.post(DISCORD_WEBHOOK_URL, { content }, { headers: { "Content-Type": "application/json" } });
-      firstCheckDone = true;
-    } else if (changed.length > 0) {
-      const changeMsg = changed.map(c =>
-        c.isOpen
-          ? `${c.name} 오픈: (${c.area})`
-          : `${c.name} 닫힘`
-      ).join("\n");
-
-      await axios.post(DISCORD_WEBHOOK_URL, {
-        content: `📣 *딥홀 상태 변경 감지*\n${changeMsg}`
-      }, {
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-  } catch (e) {
-    console.error("딥홀 체크 오류:", e?.response?.data || e.message);
+    return Object.keys(latestByServer).sort(); // ['04', '05', '07'] 형태
+  } catch (err) {
+    console.error("❌ 심층구멍 API 오류:", err.message);
+    return [];
   }
 }
 
-// 1분마다 상태 확인
-setInterval(checkDeepHoleStatus, 60 * 1000);
-checkDeepHoleStatus();
+// 웹훅 전송 함수
+async function sendDiscordMessage(servers) {
+  const serverText = servers.length > 0 ? servers.map(s => `서버 ${s}`).join(", ") : "없음";
+  const message = {
+    content: `🕳️ 현재 심층 구멍 열린 서버: ${serverText}`
+  };
+  try {
+    await axios.post(DISCORD_WEBHOOK, message);
+    console.log("✅ 디스코드 알림 전송됨:", serverText);
+  } catch (err) {
+    console.error("❌ 디스코드 웹훅 전송 실패:", err.message);
+  }
+}
 
-// 기존 /chat API
+// 상태 주기 체크 함수
+async function monitorDeepHole() {
+  const currentOpen = await fetchOpenServers();
+
+  // 최초 실행 또는 변경 사항 감지 시 전송
+  const changed =
+    currentOpen.length !== previousOpenServers.length ||
+    currentOpen.some((s, i) => s !== previousOpenServers[i]);
+
+  if (changed) {
+    await sendDiscordMessage(currentOpen);
+    previousOpenServers = currentOpen;
+  }
+}
+
+// 최초 실행 후 주기적 체크
+monitorDeepHole(); // 서버 시작 시 바로 실행
+setInterval(monitorDeepHole, 60 * 1000); // 매 1분마다 체크
+
+// 룬 및 챗봇 처리 라우팅
 app.get("/chat", async (req, res) => {
   const { prompt, system, memory } = req.query;
 
@@ -88,7 +74,6 @@ app.get("/chat", async (req, res) => {
     return res.status(400).json({ error: "Missing prompt" });
   }
 
-  // 룬 명령어
   if (prompt.startsWith("!룬")) {
     const parts = prompt.split(" ");
     if (parts.length < 2) {
@@ -100,7 +85,7 @@ app.get("/chat", async (req, res) => {
     try {
       const response = await axios.get(`https://mabimobi.life/d/api/v1/rune-tiers?klass=${klass}`, {
         headers: {
-          "Accept": "application/json",
+          Accept: "application/json",
           "Content-Type": "application/json"
         }
       });
@@ -120,25 +105,16 @@ app.get("/chat", async (req, res) => {
       };
 
       const groupedRunes = {};
-
       tier1Runes.forEach(r => {
         const categoryName = categoryMap[r.rune.category] || "기타";
-        const safeRuneName = r.rune.name
-          .replace(/[\n\r\t]/g, " ")
-          .replace(/[<>]/g, "")
-          .trim();
-
-        if (!groupedRunes[categoryName]) {
-          groupedRunes[categoryName] = [];
-        }
+        const safeRuneName = r.rune.name.replace(/[\n\r\t]/g, " ").replace(/[<>]/g, "").trim();
+        if (!groupedRunes[categoryName]) groupedRunes[categoryName] = [];
         groupedRunes[categoryName].push(safeRuneName);
       });
 
       let replyText = `${klass} 직업의 1티어 룬:\n`;
-
       Object.keys(groupedRunes).forEach(category => {
-        replyText += `\n[${category}]\n`;
-        replyText += groupedRunes[category].join(" · ") + "\n";
+        replyText += `\n[${category}]\n${groupedRunes[category].join(" · ")}\n`;
       });
 
       return res.json({ reply: replyText.trim() });
@@ -153,15 +129,13 @@ app.get("/chat", async (req, res) => {
   const systemMessage = system || "센스있고 능글맞은 한국인 친구처럼 20자 내로 대답해줘";
   const memoryList = memory ? decodeURIComponent(memory).split("|") : [];
 
-  const memoryMessages = memoryList.map(text => {
-    if (text.startsWith("유저: ")) {
-      return { role: "user", content: text.replace("유저: ", "") };
-    } else if (text.startsWith("봇: ")) {
-      return { role: "assistant", content: text.replace("봇: ", "") };
-    } else {
-      return { role: "user", content: text };
-    }
-  });
+  const memoryMessages = memoryList.map(text =>
+    text.startsWith("유저: ")
+      ? { role: "user", content: text.replace("유저: ", "") }
+      : text.startsWith("봇: ")
+      ? { role: "assistant", content: text.replace("봇: ", "") }
+      : { role: "user", content: text }
+  );
 
   const messages = [
     { role: "system", content: systemMessage },
@@ -174,7 +148,7 @@ app.get("/chat", async (req, res) => {
       "https://api.groq.com/openai/v1/chat/completions",
       {
         model: "meta-llama/llama-4-maverick-17b-128e-instruct",
-        messages: messages,
+        messages,
         max_tokens: 100
       },
       {
@@ -193,6 +167,8 @@ app.get("/chat", async (req, res) => {
   }
 });
 
+// 서버 시작
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Server listening on port ${PORT}`);
 });
