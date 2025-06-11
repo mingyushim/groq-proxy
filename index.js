@@ -8,11 +8,14 @@ app.use(cors());
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1382217136667230218/mwewhH4pp6kOjvWGji_9ZfsTdFeVUmwD2T_tAjWNbV4CFCTdRpRpdj4-0JSmuL8tTNN7";
 
-// 심층 구멍 상태 알림 관련 변수
-let lastStatus = null;
+const categoryMap = {
+  "01": "무기",
+  "02": "방어구",
+  "03": "악세사리",
+  "04": "앰블럼"
+};
 
-// 서버 ID → 이름 매핑
-const serverMap = {
+const serverNames = {
   "01": "데이안",
   "02": "아이라",
   "03": "던컨",
@@ -22,46 +25,15 @@ const serverMap = {
   "07": "칼릭스"
 };
 
-// 심층 구멍 상태 체크 함수
-async function checkDeepHoleStatus(forceNotify = false) {
-  try {
-    const { data } = await axios.get("https://mabimobi.life/d/api/v1/main/deep-hole");
-    const duncan = data.find(item => item.server === "03");
+// 모든 서버 상태 추적용
+let previousStatusMap = {}; // { "01": "열렸심", ... }
 
-    const isOpen = duncan && duncan.area;
-    const status = isOpen ? "open" : "closed";
-
-    if (forceNotify || lastStatus !== status) {
-      lastStatus = status;
-
-      const embed = {
-        embeds: [
-          {
-            title: "던컨 심층 구멍 상태",
-            description: isOpen ? "🔵 열렸심" : "🔴 닫혔심",
-            color: isOpen ? 5763719 : 15548997
-          }
-        ]
-      };
-
-      await axios.post(DISCORD_WEBHOOK_URL, embed);
-      console.log(`✅ 디스코드 알림 전송됨: ${isOpen ? "열렸심" : "닫혔심"}`);
-    }
-  } catch (error) {
-    console.error("❌ 심층 구멍 상태 확인 실패:", error.message);
-  }
-}
-
-// 서버 시작 시 1회 강제 알림
-checkDeepHoleStatus(true);
-// 이후 1분마다 상태 체크
-setInterval(() => checkDeepHoleStatus(false), 60 * 1000);
-
-// 챗봇 API
 app.get("/chat", async (req, res) => {
   const { prompt, system, memory } = req.query;
 
-  if (!prompt) return res.status(400).json({ error: "Missing prompt" });
+  if (!prompt) {
+    return res.status(400).json({ error: "Missing prompt" });
+  }
 
   // 룬 명령어 처리
   if (prompt.startsWith("!룬")) {
@@ -75,43 +47,34 @@ app.get("/chat", async (req, res) => {
     try {
       const response = await axios.get(`https://mabimobi.life/d/api/v1/rune-tiers?klass=${klass}`);
       const runes = response.data;
-
       const tier1Runes = runes.filter(r => r.tier === 1);
 
       if (tier1Runes.length === 0) {
-        return res.json({ reply: `${klass} 직업의 1티어 룬이 없습니다.` });
+        return res.json({ reply: `${klass}에 대한 1티어 룬이 없습니다.` });
       }
-
-      const categoryMap = {
-        "01": "무기",
-        "02": "방어구",
-        "03": "악세사리",
-        "04": "앰블럼"
-      };
 
       const groupedRunes = {};
       tier1Runes.forEach(r => {
-        const category = categoryMap[r.rune.category] || "기타";
+        const cat = categoryMap[r.rune.category] || "기타";
         const name = r.rune.name.replace(/[\n\r\t<>]/g, " ").trim();
-
-        if (!groupedRunes[category]) groupedRunes[category] = [];
-        groupedRunes[category].push(name);
+        if (!groupedRunes[cat]) groupedRunes[cat] = [];
+        groupedRunes[cat].push(name);
       });
 
       let replyText = `${klass} 직업의 1티어 룬:\n`;
-      for (const category in groupedRunes) {
-        replyText += `\n[${category}]\n`;
-        replyText += groupedRunes[category].join(" · ") + "\n";
+      for (const [cat, list] of Object.entries(groupedRunes)) {
+        replyText += `\n[${cat}]\n${list.join(" · ")}\n`;
       }
 
       return res.json({ reply: replyText.trim() });
-    } catch (err) {
-      console.error("룬 API 오류:", err.response?.data || err.message);
-      return res.json({ reply: "룬 정보를 불러오는 중 오류가 발생했습니다." });
+
+    } catch (error) {
+      console.error("룬 API 오류:", error.message);
+      return res.json({ reply: "룬 정보를 가져오는 중 오류가 발생했습니다." });
     }
   }
 
-  // 일반 챗봇 처리
+  // 일반 챗 처리
   const systemMessage = system || "센스있고 능글맞은 한국인 친구처럼 20자 내로 대답해줘";
   const memoryList = memory ? decodeURIComponent(memory).split("|") : [];
 
@@ -120,9 +83,8 @@ app.get("/chat", async (req, res) => {
       return { role: "user", content: text.replace("유저: ", "") };
     } else if (text.startsWith("봇: ")) {
       return { role: "assistant", content: text.replace("봇: ", "") };
-    } else {
-      return { role: "user", content: text };
     }
+    return { role: "user", content: text };
   });
 
   const messages = [
@@ -136,7 +98,7 @@ app.get("/chat", async (req, res) => {
       "https://api.groq.com/openai/v1/chat/completions",
       {
         model: "meta-llama/llama-4-maverick-17b-128e-instruct",
-        messages: messages,
+        messages,
         max_tokens: 100
       },
       {
@@ -150,13 +112,59 @@ app.get("/chat", async (req, res) => {
     const reply = response.data.choices[0].message.content.trim();
     res.json({ reply });
   } catch (error) {
-    console.error("Groq API 오류:", error.response?.data || error.message);
+    console.error("Groq API 오류:", error.message);
     res.status(500).json({ error: "Groq API 호출 실패" });
   }
 });
 
-// 서버 실행
+// 디스코드 임베드 전송
+async function sendDiscordAlert(serverCode, statusText) {
+  const serverName = serverNames[serverCode] || serverCode;
+
+  const embed = {
+    title: `🔔 ${serverName} 서버 심층구멍 상태`,
+    description: `현재 상태: **${statusText}**`,
+    color: statusText === "열렸심" ? 0x00ff00 : 0xff0000
+  };
+
+  try {
+    await axios.post(DISCORD_WEBHOOK_URL, { embeds: [embed] });
+    console.log(`[알림] ${serverName} - ${statusText}`);
+  } catch (err) {
+    console.error("디스코드 웹훅 오류:", err.message);
+  }
+}
+
+// 심층구멍 상태 체크
+async function checkDeepHoleStatus() {
+  try {
+    const response = await axios.get("https://mabimobi.life/d/api/v1/main/deep-hole");
+    const data = response.data;
+
+    for (const item of data) {
+      const serverCode = item.server;
+      const currentStatus = item.open ? "열렸심" : "닫혔심";
+
+      if (previousStatusMap[serverCode] === undefined) {
+        // 최초 실행: 무조건 알림
+        await sendDiscordAlert(serverCode, currentStatus);
+      } else if (previousStatusMap[serverCode] !== currentStatus) {
+        // 상태 변화 시: 알림
+        await sendDiscordAlert(serverCode, currentStatus);
+      }
+
+      previousStatusMap[serverCode] = currentStatus;
+    }
+  } catch (error) {
+    console.error("심층구멍 상태 확인 오류:", error.message);
+  }
+}
+
+// 최초 실행 1회 + 이후 반복 체크
+checkDeepHoleStatus();
+setInterval(checkDeepHoleStatus, 60 * 1000);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Server listening on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
