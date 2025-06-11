@@ -119,7 +119,7 @@ app.get("/chat", async (req, res) => {
 });
 
 // ==================== 추가된 심층구멍 알림 기능 ====================
-const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1382217136667230218/...";
+const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1382217136667230218/mwewhH4pp6kOjvWGji_9ZfsTdFeVUmwD2T_tAjWNbV4CFCTdRpRpdj4-0JSmuL8tTNN7";
 const DEEP_HOLE_API_URL = "https://mabimobi.life/d/api/v1/main/deep-hole";
 
 const SERVER_MAP = {
