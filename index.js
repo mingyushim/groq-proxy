@@ -6,69 +6,7 @@ const app = express();
 app.use(cors());
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const PORT = process.env.PORT || 3000;
 
-// 딥홀 관련 상수
-const DEEP_HOLE_API = "https://mabimobi.life/d/api/v1/main/deep-hole";
-const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1382217136667230218/mwewhH4pp6kOjvWGji_9ZfsTdFeVUmwD2T_tAjWNbV4CFCTdRpRpdj4-0JSmuL8tTNN7";
-
-const serverNameMap = {
-  "01": "데이안",
-  "02": "아이라",
-  "03": "던컨",
-  "04": "알리사",
-  "05": "메이븐",
-  "06": "라사",
-  "07": "칼릭스"
-};
-
-let lastStatusMap = {}; // 상태 변경 감지용
-
-// 딥홀 상태 디버깅 및 감지
-const checkDeepHoleStatus = async () => {
-  try {
-    const { data } = await axios.get(DEEP_HOLE_API);
-
-    const activeServers = {};
-    data.forEach(entry => {
-      activeServers[entry.server] = entry.area;
-    });
-
-    const allServerIds = Object.keys(serverNameMap);
-
-    const currentStatusMap = {};
-    const statusLines = allServerIds.map(serverId => {
-      const name = serverNameMap[serverId];
-      if (activeServers[serverId]) {
-        currentStatusMap[serverId] = true;
-        return `${name}: 심층구멍 생겻심 (${activeServers[serverId]})`;
-      } else {
-        currentStatusMap[serverId] = false;
-        return `${name}: 심층구멍없심`;
-      }
-    });
-
-    // 상태 변화가 있는 경우에만 전송
-    const statusChanged = allServerIds.some(id => lastStatusMap[id] !== currentStatusMap[id]);
-    lastStatusMap = currentStatusMap;
-
-    const content = `📡 딥홀 상태:\n` + statusLines.join("\n");
-
-    // 항상 전송 (디버그용), 변경 감지만 하고 싶다면 if (statusChanged) { ... } 로 감싸세요
-    await axios.post(DISCORD_WEBHOOK_URL, { content }, {
-      headers: { "Content-Type": "application/json" }
-    });
-
-  } catch (e) {
-    console.error("딥홀 상태 확인 실패:", e?.response?.data || e.message);
-  }
-};
-
-// 1분마다 상태 확인
-setInterval(checkDeepHoleStatus, 60 * 1000);
-checkDeepHoleStatus(); // 서버 시작 시 1회 즉시 실행
-
-// 기존 챗 기능
 app.get("/chat", async (req, res) => {
   const { prompt, system, memory } = req.query;
 
@@ -83,9 +21,10 @@ app.get("/chat", async (req, res) => {
       return res.json({ reply: "룬 명령어 사용법: !룬 숫자(예: !룬 01)" });
     }
 
-    const klass = parts[1].padStart(2, "0");
+    const klass = parts[1].padStart(2, "0"); // '1' -> '01' 등 포맷 맞춤
 
     try {
+      // 룬 API 호출
       const response = await axios.get(`https://mabimobi.life/d/api/v1/rune-tiers?klass=${klass}`, {
         headers: {
           "Accept": "application/json",
@@ -94,12 +33,15 @@ app.get("/chat", async (req, res) => {
       });
 
       const runes = response.data;
+
+      // 1티어 룬만 필터
       const tier1Runes = runes.filter(r => r.tier === 1);
 
       if (tier1Runes.length === 0) {
         return res.json({ reply: `${klass}에 대한 1티어 룬이 없습니다.` });
       }
 
+      // 카테고리 매핑
       const categoryMap = {
         "01": "무기",
         "02": "방어구",
@@ -107,22 +49,28 @@ app.get("/chat", async (req, res) => {
         "04": "앰블럼"
       };
 
+      // 카테고리별로 그룹화
       const groupedRunes = {};
 
       tier1Runes.forEach(r => {
         const categoryName = categoryMap[r.rune.category] || "기타";
+
+        // 특수문자 제거 (카카오 메시지 안전하게 처리)
         const safeRuneName = r.rune.name
           .replace(/[\n\r\t]/g, " ")
           .replace(/[<>]/g, "")
           .trim();
 
+        // 그룹에 추가
         if (!groupedRunes[categoryName]) {
           groupedRunes[categoryName] = [];
         }
         groupedRunes[categoryName].push(safeRuneName);
       });
 
+      // 카테고리별로 문자열 구성
       let replyText = `${klass} 직업의 1티어 룬:\n`;
+
       Object.keys(groupedRunes).forEach(category => {
         replyText += `\n[${category}]\n`;
         replyText += groupedRunes[category].join(" · ") + "\n";
@@ -136,7 +84,8 @@ app.get("/chat", async (req, res) => {
     }
   }
 
-  // 일반 챗봇 처리
+  // 그 외 일반 챗봇 처리
+
   const systemMessage = system || "센스있고 능글맞은 한국인 친구처럼 20자 내로 대답해줘";
   const memoryList = memory ? decodeURIComponent(memory).split("|") : [];
 
@@ -174,13 +123,13 @@ app.get("/chat", async (req, res) => {
 
     const reply = response.data.choices[0].message.content.trim();
     res.json({ reply });
-
   } catch (error) {
     console.error("Groq API error:", error?.response?.data || error.message);
     res.status(500).json({ error: "Groq API 호출 실패" });
   }
 });
 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Server listening on port ${PORT}`);
 });
