@@ -7,9 +7,63 @@ app.use(cors());
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// =======================
-// 💬 룬 및 챗봇 처리 라우트
-// =======================
+// 서버 ID → 이름 매핑
+const serverNameMap = {
+  "01": "데이안",
+  "02": "아이라",
+  "03": "던컨",
+  "04": "알리사",
+  "05": "메이븐",
+  "06": "라사",
+  "07": "칼릭스"
+};
+
+// ========== 📡 딥홀 상태 체크 기능 ==========
+const DEEP_HOLE_API = "https://mabimobi.life/d/api/v1/main/deep-hole";
+const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1382217136667230218/mwewhH4pp6kOjvWGji_9ZfsTdFeVUmwD2T_tAjWNbV4CFCTdRpRpdj4-0JSmuL8tTNN7";
+
+// 이전 상태 저장소
+let lastStates = {};
+
+const checkDeepHoleState = async () => {
+  try {
+    const response = await axios.get(DEEP_HOLE_API);
+    const servers = response.data;
+
+    for (const server of servers) {
+      const serverId = server.server;
+      const serverName = serverNameMap[serverId] || serverId;
+      const currentState = server.state;
+      const prevState = lastStates[serverId];
+
+      if (prevState !== undefined && prevState !== currentState) {
+        const messageText = currentState === "area" ? "심층구멍 생겻심" : "심층구멍 없심";
+
+        const message = {
+          content: `📡 ${serverName} 서버 상태 변경: ${messageText}`
+        };
+
+        await axios.post(DISCORD_WEBHOOK_URL, message, {
+          headers: {
+            "Content-Type": "application/json"
+          }
+        });
+
+        console.log(`🔔 상태 변경: ${serverName} (${serverId}) - ${prevState} → ${currentState}`);
+      }
+
+      lastStates[serverId] = currentState;
+    }
+  } catch (error) {
+    console.error("딥홀 상태 확인 중 오류:", error?.response?.data || error.message);
+  }
+};
+
+// 시작 시 한 번 실행하고, 1분마다 반복
+checkDeepHoleState();
+setInterval(checkDeepHoleState, 60 * 1000);
+
+// ========== 💬 챗 및 룬 명령어 처리 ==========
 app.get("/chat", async (req, res) => {
   const { prompt, system, memory } = req.query;
 
@@ -17,7 +71,7 @@ app.get("/chat", async (req, res) => {
     return res.status(400).json({ error: "Missing prompt" });
   }
 
-  // 🔍 룬 명령어 처리
+  // 룬 명령어 처리
   if (prompt.startsWith("!룬")) {
     const parts = prompt.split(" ");
     if (parts.length < 2) {
@@ -78,7 +132,7 @@ app.get("/chat", async (req, res) => {
     }
   }
 
-  // 🤖 일반 챗봇 응답
+  // 일반 챗 처리
   const systemMessage = system || "센스있고 능글맞은 한국인 친구처럼 20자 내로 대답해줘";
   const memoryList = memory ? decodeURIComponent(memory).split("|") : [];
 
@@ -122,57 +176,8 @@ app.get("/chat", async (req, res) => {
   }
 });
 
-// =======================
-// 🕳️ 딥홀 상태 감지 기능
-// =======================
-const DEEP_HOLE_API = "https://mabimobi.life/d/api/v1/main/deep-hole";
-const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1382217136667230218/mwewhH4pp6kOjvWGji_9ZfsTdFeVUmwD2T_tAjWNbV4CFCTdRpRpdj4-0JSmuL8tTNN7";
-
-let lastState = null;
-
-const checkDeepHoleState = async () => {
-  try {
-    const response = await axios.get(DEEP_HOLE_API);
-    const servers = response.data;
-
-    const server03 = servers.find(s => s.server === "03");
-
-    if (!server03) {
-      console.warn("03번 서버를 찾을 수 없습니다.");
-      return;
-    }
-
-    const currentState = server03.state;
-
-    if (lastState !== null && currentState !== lastState) {
-      const messageText = currentState === "area" ? "심층구멍 생겻심" : "심층구멍없심";
-
-      const message = {
-        content: `⚠️ 03번 서버 상태 변경: ${messageText}`
-      };
-
-      await axios.post(DISCORD_WEBHOOK_URL, message, {
-        headers: {
-          "Content-Type": "application/json"
-        }
-      });
-
-      console.log(`🔔 상태 변경: ${lastState} -> ${currentState} (${messageText})`);
-    }
-
-    lastState = currentState;
-  } catch (error) {
-    console.error("딥홀 상태 확인 중 오류:", error?.response?.data || error.message);
-  }
-};
-
-checkDeepHoleState(); // 서버 시작 시 한 번 실행
-setInterval(checkDeepHoleState, 60 * 1000); // 1분마다 체크
-
-// =======================
-// 🚀 서버 시작
-// =======================
-const PORT = process.env.PORT || 3000;
+// ========== 🚀 서버 실행 ==========
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`✅ Server listening on port ${PORT}`);
 });
