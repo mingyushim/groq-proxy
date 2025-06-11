@@ -66,7 +66,7 @@ async function monitorDeepHole() {
     previousDuncanStatus = duncanOpen;
   }
 }
-
+ 
 // 최초 실행 + 주기적 실행
 monitorDeepHole();
 setInterval(monitorDeepHole, 60 * 1000); // 1분마다
