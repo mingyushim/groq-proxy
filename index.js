@@ -8,17 +8,26 @@ app.use(cors());
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1382217136667230218/mwewhH4pp6kOjvWGji_9ZfsTdFeVUmwD2T_tAjWNbV4CFCTdRpRpdj4-0JSmuL8tTNN7";
 
-let previousOpenServers = [];
+let previousDuncanStatus = false;
 
-// 심층 구멍 오픈 서버 가져오기
+const SERVER_NAME_MAP = {
+  "01": "데이안",
+  "02": "아이라",
+  "03": "던컨",
+  "04": "알리사",
+  "05": "메이븐",
+  "06": "라사",
+  "07": "칼릭스"
+};
+
+// 심층 구멍 상태 확인
 async function fetchOpenServers() {
   try {
-    const res = await axios.get("https://mabimobi.life/d/api/v1/main/deep-hole");
+    const res = await axios.get("https://mabimobi.life/d/api/v1/deep-hole-reports");
     const now = new Date();
     const valid = res.data.filter(entry => new Date(entry.expired) > now);
     const latestByServer = {};
 
-    // 서버별 가장 최신 데이터 유지
     valid.forEach(item => {
       const s = item.server;
       if (!latestByServer[s] || new Date(item.expired) > new Date(latestByServer[s].expired)) {
@@ -26,47 +35,43 @@ async function fetchOpenServers() {
       }
     });
 
-    return Object.keys(latestByServer).sort(); // ['04', '05', '07'] 형태
+    return Object.keys(latestByServer).sort(); // ['03', '05', '07'] 형태
   } catch (err) {
     console.error("❌ 심층구멍 API 오류:", err.message);
     return [];
   }
 }
 
-// 웹훅 전송 함수
-async function sendDiscordMessage(servers) {
-  const serverText = servers.length > 0 ? servers.map(s => `서버 ${s}`).join(", ") : "없음";
-  const message = {
-    content: `🕳️ 현재 심층 구멍 열린 서버: ${serverText}`
-  };
+// 디스코드 전송 함수 (던컨 한정)
+async function sendDiscordMessageForDuncan(isOpen) {
+  const content = isOpen
+    ? `🟢 던컨 서버에 심층 구멍이 열렸습니다!`
+    : `🔴 던컨 서버의 심층 구멍이 닫혔습니다.`;
+
   try {
-    await axios.post(DISCORD_WEBHOOK, message);
-    console.log("✅ 디스코드 알림 전송됨:", serverText);
+    await axios.post(DISCORD_WEBHOOK, { content });
+    console.log("✅ 디스코드 알림:", content);
   } catch (err) {
-    console.error("❌ 디스코드 웹훅 전송 실패:", err.message);
+    console.error("❌ 디스코드 전송 실패:", err.message);
   }
 }
 
-// 상태 주기 체크 함수
+// 상태 감지 및 알림
 async function monitorDeepHole() {
-  const currentOpen = await fetchOpenServers();
+  const openServers = await fetchOpenServers();
+  const duncanOpen = openServers.includes("03");
 
-  // 최초 실행 또는 변경 사항 감지 시 전송
-  const changed =
-    currentOpen.length !== previousOpenServers.length ||
-    currentOpen.some((s, i) => s !== previousOpenServers[i]);
-
-  if (changed) {
-    await sendDiscordMessage(currentOpen);
-    previousOpenServers = currentOpen;
+  if (duncanOpen !== previousDuncanStatus) {
+    await sendDiscordMessageForDuncan(duncanOpen);
+    previousDuncanStatus = duncanOpen;
   }
 }
 
-// 최초 실행 후 주기적 체크
-monitorDeepHole(); // 서버 시작 시 바로 실행
-setInterval(monitorDeepHole, 60 * 1000); // 매 1분마다 체크
+// 최초 실행 + 주기적 실행
+monitorDeepHole();
+setInterval(monitorDeepHole, 60 * 1000); // 1분마다
 
-// 룬 및 챗봇 처리 라우팅
+// 룬 & 챗봇 처리 라우팅
 app.get("/chat", async (req, res) => {
   const { prompt, system, memory } = req.query;
 
@@ -74,6 +79,7 @@ app.get("/chat", async (req, res) => {
     return res.status(400).json({ error: "Missing prompt" });
   }
 
+  // 룬 처리
   if (prompt.startsWith("!룬")) {
     const parts = prompt.split(" ");
     if (parts.length < 2) {
@@ -118,9 +124,8 @@ app.get("/chat", async (req, res) => {
       });
 
       return res.json({ reply: replyText.trim() });
-
     } catch (error) {
-      console.error("룬 API 호출 오류:", error.response?.data || error.message);
+      console.error("룬 API 오류:", error.response?.data || error.message);
       return res.json({ reply: "룬 정보를 가져오는 중 오류가 발생했습니다." });
     }
   }
